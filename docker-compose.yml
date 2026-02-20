@@ -1,0 +1,135 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks: [appnet]
+
+  # Single-node Kafka (KRaft) — no Zookeeper
+  kafka:
+    image: bitnami/kafka:3.7
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [appnet]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8089:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [appnet]
+
+  user-service:
+    build: ./user-service
+    environment:
+      # DB
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/usersdb?createDatabaseIfNotExist=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Eureka off (we're not running Eureka here)
+      EUREKA_CLIENT_ENABLED: "false"
+      # JWT
+      SECURITY_JWT_SECRET: ${JWT_SECRET}
+      SECURITY_JWT_AUDIENCE: rewards-platform
+      SECURITY_JWT_ISSUER: user-service
+      # Server port
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [appnet]
+
+  transaction-service:
+    build: ./transaction-service
+    environment:
+      # DB
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/txdb?createDatabaseIfNotExist=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      TX_KAFKA_TOPIC_CREATED: transaction.created.v1
+      # Outbox
+      TX_OUTBOX_BATCH_SIZE: 50
+      TX_OUTBOX_MAX_RETRIES: 5
+      TX_OUTBOX_PUBLISH_INTERVAL_MS: 1000
+      # JWT (must match user-service)
+      SECURITY_JWT_SECRET: ${JWT_SECRET}
+      SECURITY_JWT_AUDIENCE: rewards-platform
+      SECURITY_JWT_ISSUER: user-service
+      # Turn off Eureka
+      EUREKA_CLIENT_ENABLED: "false"
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [appnet]
+
+  reward-service:
+    build: ./reward-service
+    environment:
+      # DB
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/rewardsdb?createDatabaseIfNotExist=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REARDS_TOPIC: transaction.created.v1
+      # JWT (needed for user-facing endpoints)
+      SECURITY_JWT_SECRET: ${JWT_SECRET}
+      SECURITY_JWT_AUDIENCE: rewards-platform
+      SECURITY_JWT_ISSUER: user-service
+      # Turn off Eureka
+      EUREKA_CLIENT_ENABLED: "false"
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [appnet]
+
+networks:
+  appnet:
+
+volumes:
+  mysql-data:

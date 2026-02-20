@@ -1,0 +1,48 @@
+server:
+  port: 8083
+
+spring:
+  main:
+      allow-bean-definition-overriding: true
+  application:
+    name: reward-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/rewardsdb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  cloud:
+    config:
+      enabled: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+security:
+  jwt:
+    secret: ZDIzYzIyYjYxZDM5ZjY2ZDU2MTZmMWY5YjQzYzIyYjYxZDM5ZjY2ZA==
+    audience: rewards-platform
+    issuer: user-service
+
+kafka:
+  bootstrap-servers: localhost:9092
+  consumer:
+    auto-offset-reset: earliest
+
+rewards:
+  topic: transaction.created.v1
+  multipliers:
+    DEFAULT: 1
+    GROCERIES: 5
+    DINING: 3
+    TRAVEL: 4
+    FUEL: 2
+    UTILITIES: 1
+    SHOPPING: 2
+
