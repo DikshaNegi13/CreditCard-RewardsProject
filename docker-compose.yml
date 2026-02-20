@@ -2,9 +2,9 @@ version: "3.9"
 
 services:
   mysql:
-    image: mysql:8
+    image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: root
     command: --default-authentication-plugin=mysql_native_password
     ports:
       - "3306:3306"
@@ -19,7 +19,7 @@ services:
 
   # Single-node Kafka (KRaft) — no Zookeeper
   kafka:
-    image: bitnami/kafka:3.7
+    image: bitnami/kafka:3.6
     environment:
       - KAFKA_CFG_NODE_ID=1
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
@@ -56,7 +56,7 @@ services:
       # DB
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/usersdb?createDatabaseIfNotExist=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATASOURCE_PASSWORD: root
       # Eureka off (we're not running Eureka here)
       EUREKA_CLIENT_ENABLED: "false"
       # JWT
@@ -73,12 +73,12 @@ services:
     networks: [appnet]
 
   transaction-service:
-    build: ./transaction-service
+    build: ./Transaction-Service
     environment:
       # DB
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/txdb?createDatabaseIfNotExist=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATASOURCE_PASSWORD: root
       # Kafka
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       TX_KAFKA_TOPIC_CREATED: transaction.created.v1
@@ -103,12 +103,12 @@ services:
     networks: [appnet]
 
   reward-service:
-    build: ./reward-service
+    build: ./rewards-service
     environment:
       # DB
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/rewardsdb?createDatabaseIfNotExist=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATASOURCE_PASSWORD: root
       # Kafka
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       REARDS_TOPIC: transaction.created.v1
